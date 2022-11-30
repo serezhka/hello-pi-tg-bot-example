@@ -1,6 +1,7 @@
 plugins {
     id 'org.springframework.boot' version '2.7.5'
     id 'io.spring.dependency-management' version '1.1.0'
+    id 'org.hidetake.ssh' version '2.10.1'
     id 'java'
 }
 
@@ -31,6 +32,34 @@ dependencies {
 
 test {
     useJUnitPlatform()
+}
+
+tasks.named('bootJar') {
+    launchScript()
+}
+
+remotes {
+    raspberrypi {
+        host = '192.168.0.25'
+        user = 'kali'
+        password = 'kali'
+    }
+}
+
+task deploy {
+    dependsOn bootJar
+    doLast {
+        ssh.run {
+            session(remotes.raspberrypi) {
+                execute "sudo service $project.name stop", ignoreError: true
+                put from: "$buildDir/libs/${project.name}.jar", into: "/home/kali/$project.name"
+                execute "sudo ln -s /home/kali/$project.name/${project.name}.jar /etc/init.d/$project.name", ignoreError: true
+                execute "sudo systemctl daemon-reload"
+                execute "sudo systemctl enable $project.name"
+                execute "sudo service $project.name start"
+            }
+        }
+    }
 }
 
 wrapper {
